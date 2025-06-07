@@ -31,7 +31,7 @@ def greet_and_print_datetime():
 
 # Define default arguments for the DAG
 default_args = {
-    'owner': 'Fm',  # The owner of this DAG
+    'owner': 'Ik',  # The owner of this DAG
     'depends_on_past': False,  # Whether this DAG depends on the success of previous runs
     'email_on_failure': False,  # Whether to send an email on task failure
     'email_on_retry': False,  # Whether to send an email on task retry
