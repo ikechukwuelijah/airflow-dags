@@ -1,0 +1,21 @@
+name: Deploy DAGs to Airflow
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Deploy DAGs locally
+        run: |
+          cd ~/airflow-docker/dags
+          git fetch origin main
+          git reset --hard origin/main
+          cd ~/airflow-docker
+          docker-compose restart
