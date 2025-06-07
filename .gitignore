@@ -1,0 +1,4 @@
+# Ignore configs or secrets
+*.yaml
+*.yml
+*.env
