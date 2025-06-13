@@ -4,7 +4,7 @@ import requests
 from datetime import datetime, timedelta
 
 # Configuration
-API_KEY = "fc284336c861c52e8185c63082114ad5"
+API_KEY = ""
 LAT = 51.5074
 LON = -0.1278
 
@@ -59,11 +59,7 @@ import psycopg2
 from psycopg2 import sql
 
 DB_CONFIG = {
-    "dbname": "dwh",
-    "user":   "postgres",
-    "password":"DataEngineer001",
-    "host":   "127.0.0.1", # force to use localhost
-    "port":   "5432"
+    
 }
 TABLE_RAW = "raw_air_quality"
 
