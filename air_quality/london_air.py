@@ -65,7 +65,7 @@ with DAG(
     def transform(**context):
         """
         Transforms raw JSON entries into list of dictionaries suitable for DB loading.
-        Pushes transformed records to XCom.
+        Converts timestamps to ISO strings for XCom serialization.
         """
         ti = context['ti']
         raw_list = ti.xcom_pull(key='raw_data', task_ids='extract') or []
@@ -73,19 +73,18 @@ with DAG(
         LOCATION_NAME = 'London Central AQ'
         rows = []
         for entry in raw_list:
+            ts_iso = datetime.utcfromtimestamp(entry['dt']).isoformat()
             row = {
-                'timestamp': datetime.utcfromtimestamp(entry['dt']),
+                'timestamp': ts_iso,
                 'city': CITY_NAME,
                 'location': LOCATION_NAME,
                 'aqi': entry['main']['aqi'],
             }
-            # flatten components
-            row.update({k if k != 'pm2_5' else 'pm25': v for k, v in entry['components'].items()})
+            components = { (k if k != 'pm2_5' else 'pm25'): v for k,v in entry['components'].items() }
+            row.update(components)
             rows.append(row)
-        df = pd.DataFrame(rows)
-        df.rename(columns={'pm2_5': 'pm25'}, inplace=True)
-        # Push transformed records (as dicts) to XCom
-        context['ti'].xcom_push(key='transformed', value=df.to_dict(orient='records'))
+        # Push transformed records (as JSON-serializable dicts) to XCom
+        context['ti'].xcom_push(key='transformed', value=rows)
 
     def load_raw(**context):
         """
