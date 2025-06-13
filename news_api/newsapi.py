@@ -4,11 +4,11 @@ import pandas as pd
 import psycopg2
 
 # ========== CONFIGURATION ==========
-API_KEY     = "9d64ba92867247f2a6c57a04a7eebc78"  # your NewsAPI key
-DB_NAME     = "dwh"
-DB_USER     = "postgres"
-DB_PASSWORD = "DataEngineer001"
-DB_HOST     = "127.0.0.1"   # force TCP to Windows Postgres
+API_KEY     = ""  # your NewsAPI key
+DB_NAME     = ""
+DB_USER     = ""
+DB_PASSWORD = ""
+DB_HOST     = ""   # force TCP to Windows Postgres
 DB_PORT     = "5432"
 
 # ========== EXTRACT ==========
