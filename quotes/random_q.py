@@ -11,7 +11,7 @@ def fetch_quotes(num_quotes=10, delay_seconds=2):
     url = "https://quotes15.p.rapidapi.com/quotes/random/"
     querystring = {"language_code": "en"}
     headers = {
-        "x-rapidapi-key": "7b66ced988msh253ab4a526f3148p1eed78jsn4d8bcaa48242",
+        "x-rapidapi-key": "",
         "x-rapidapi-host": "quotes15.p.rapidapi.com"
     }
 
@@ -63,11 +63,7 @@ def load_data(df):
         return
 
     # Database connection details
-    db_username = "postgres"
-    db_password = "DataEngineer001"
-    db_host = "127.0.0.1"  
-    db_port = "5432"
-    db_name = "dwh"
+    
 
     try:
         # Establish connection to the PostgreSQL database
