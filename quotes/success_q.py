@@ -6,7 +6,7 @@ def fetch_quote():
     url = "https://quotes-api12.p.rapidapi.com/quotes/random"
     querystring = {"type": "success"}
     headers = {
-        "x-rapidapi-key": "efbc12a764msh39a81e663d3e104p1e76acjsn337fd1d56751",
+        "x-rapidapi-key": "",
         "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
     }
 
@@ -16,11 +16,7 @@ def fetch_quote():
 
 def load_to_postgres(data):
     conn = psycopg2.connect(
-        dbname="dwh",
-        user="postgres",
-        password="DataEngineer001",
-        host="127.0.0.1",
-        port="5432"
+        
     )
     cur = conn.cursor()
 
