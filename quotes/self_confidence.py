@@ -85,11 +85,7 @@ def load_to_postgres(**kwargs):
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
 
     conn = psycopg2.connect(
-        dbname="dwh",
-        user="ikeengr",
-        password="DataEngineer247",
-        host="89.40.0.150",
-        port="5432"
+        
     )
     cur = conn.cursor()
 
