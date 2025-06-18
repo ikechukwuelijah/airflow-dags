@@ -1,5 +1,6 @@
 from airflow import DAG
 from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.models import Variable
 from datetime import datetime
 import requests
@@ -84,9 +85,9 @@ def load_to_postgres(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
 
-    conn = psycopg2.connect(
-        
-    )
+   hook = PostgresHook(postgres_conn_id='postgres_default')
+    conn = hook.get_conn()
+    cur = conn.cursor()
     cur = conn.cursor()
 
     cur.execute("""
