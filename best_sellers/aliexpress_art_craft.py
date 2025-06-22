@@ -7,7 +7,7 @@ url = "https://aliexpress-business-api.p.rapidapi.com/affiliate-hot-products.php
 querystring = {"keyWord":"kids art and craft","currency":"USD","lang":"en","country":"us","filter":"best_seller"}
 
 headers = {
-	"x-rapidapi-key": "e7cbee4ae1mshd0704b6dcc65548p1632e3jsncb04d537a049",
+	"x-rapidapi-key": "",
 	"x-rapidapi-host": "aliexpress-business-api.p.rapidapi.com"
 }
 
