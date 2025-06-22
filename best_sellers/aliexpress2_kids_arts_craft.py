@@ -15,7 +15,7 @@ querystring = {
     "categoryId":"best seller"
 }
 headers = {
-    "x-rapidapi-key": "e7cbee4ae1mshd0704b6dcc65548p1632e3jsncb04d537a049", 
+    "x-rapidapi-key": "", 
     "x-rapidapi-host": "aliexpress-business-api.p.rapidapi.com"
 }
 
