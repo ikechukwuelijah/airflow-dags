@@ -12,7 +12,7 @@ is_prime = "false"
 deals_and_discounts = "NONE"
 
 headers = {
-    "x-rapidapi-key": "e7cbee4ae1mshd0704b6dcc65548p1632e3jsncb04d537a049",
+    "x-rapidapi-key": "",
     "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
 }
 
