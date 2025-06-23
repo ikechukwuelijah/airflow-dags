@@ -26,7 +26,7 @@ def fetch_quote(**kwargs):
     url = "https://quotes-api12.p.rapidapi.com/quotes/random"
     querystring = {"type": "selfconfidence"}
     headers = {
-        "x-rapidapi-key": "efbc12a764msh39a81e663d3e104p1e76acjsn337fd1d56751",
+        "x-rapidapi-key": "",
         "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
     }
 
