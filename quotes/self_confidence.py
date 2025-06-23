@@ -31,9 +31,9 @@ def fetch_quote(**kwargs):
     }
 
     response = requests.get(url, headers=headers, params=querystring)
-    response.raise_for_status()
     quote_data = response.json()
     kwargs['ti'].xcom_push(key='quote_data', value=quote_data)
+
 
 # Task 2: Send plain text email
 def send_quote_as_text_email(**kwargs):
@@ -73,6 +73,7 @@ def send_quote_as_text_email(**kwargs):
     except Exception as e:
         print(f"Text email sending failed: {e}")
         raise
+
 
 # Task 3: Load quote into PostgreSQL
 def load_to_postgres(**kwargs):
