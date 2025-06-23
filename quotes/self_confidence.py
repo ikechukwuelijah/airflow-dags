@@ -26,14 +26,14 @@ def fetch_quote(**kwargs):
     url = "https://quotes-api12.p.rapidapi.com/quotes/random"
     querystring = {"type": "selfconfidence"}
     headers = {
-        "x-rapidapi-key": "",
+        "x-rapidapi-key": "<YOUR_RAPIDAPI_KEY>",
         "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
     }
 
     response = requests.get(url, headers=headers, params=querystring)
+    response.raise_for_status()
     quote_data = response.json()
     kwargs['ti'].xcom_push(key='quote_data', value=quote_data)
-
 
 # Task 2: Send plain text email
 def send_quote_as_text_email(**kwargs):
@@ -74,11 +74,25 @@ def send_quote_as_text_email(**kwargs):
         print(f"Text email sending failed: {e}")
         raise
 
-
 # Task 3: Load quote into PostgreSQL
 def load_to_postgres(**kwargs):
     ti   = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
+
+    # Handle different data structures returned by the API
+    if isinstance(data, list) and data:
+        record = data[0]
+    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
+        record = data['data'][0]
+    elif isinstance(data, dict):
+        record = data
+    else:
+        raise RuntimeError(f"Unexpected XCom data format: {data!r}")
+
+    # Extract fields with defaults
+    quote_text = record.get('quote') or record.get('text') or 'No quote'
+    author     = record.get('author', 'Unknown')
+    qtype      = record.get('type') or record.get('category') or 'N/A'
 
     hook = PostgresHook(postgres_conn_id='postgres_default')
     conn = hook.get_conn()
@@ -96,12 +110,11 @@ def load_to_postgres(**kwargs):
     cur.execute("""
         INSERT INTO self_confidence (quote, author, type)
         VALUES (%s, %s, %s)
-    """, (data['quote'], data['author'], data['type']))
+    """, (quote_text, author, qtype))
 
     conn.commit()
     cur.close()
     conn.close()
-
 
 # Define tasks
 fetch_task = PythonOperator(
