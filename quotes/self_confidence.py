@@ -34,24 +34,17 @@ def fetch_quote(**kwargs):
     response = requests.get(url, headers=headers, params=querystring)
     response.raise_for_status()
     data = response.json()
-
-    # Normalize to a single record dict
-    if isinstance(data, list) and data:
-        record = data[0]
-    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
-        record = data['data'][0]
-    elif isinstance(data, dict):
-        record = data
-    else:
-        record = {}
-
-    # Push only the normalized record to XCom
-    kwargs['ti'].xcom_push(key='quote_data', value=record)
+    # Log raw API response for debugging
+    print("Fetched quote data:", data)
+    # Push raw data to XCom
+    kwargs['ti'].xcom_push(key='quote_data', value=data)
 
 # Task 2: Send plain text email
 def send_quote_as_text_email(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
+    # Debug print
+    print("XCom data for email task:", data)
 
     email_config = Variable.get("email_config", deserialize_json=True)
     smtp_host     = email_config['smtp_host']
@@ -61,9 +54,11 @@ def send_quote_as_text_email(**kwargs):
     sender_email  = email_config['sender_email']
     receiver_email= email_config['receiver_email']
 
-    quote  = data.get('quote', 'No quote found.')
-    author = data.get('author', 'Unknown')
-    qtype  = data.get('type', 'N/A')
+    # Attempt to extract fields directly
+    quote  = data.get('quote', 'No quote found.') if isinstance(data, dict) else 'No quote found.'
+    author = data.get('author', 'Unknown') if isinstance(data, dict) else 'Unknown'
+    qtype  = data.get('type', 'N/A') if isinstance(data, dict) else 'N/A'
+
     body   = f"Here is your daily self-confidence quote:\n\n\"{quote}\"\n\n- {author} ({qtype})"
 
     msg = MIMEMultipart()
@@ -91,27 +86,18 @@ def send_quote_as_text_email(**kwargs):
 def load_to_postgres(**kwargs):
     ti   = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
+    # Debug print
+    print("XCom data for load task:", data)
 
-    # Safely extract quote, author, type from whatever structure
-    try:
-        quote_text = data.get('quote')
-        author     = data.get('author')
-        qtype      = data.get('type')
-    except AttributeError:
-        # If data isn't a dict, fallback
-        quote_text = None
-        author = None
-        qtype = None
-
-    quote_text = quote_text or (data[0].get('quote') if isinstance(data, list) and data else 'No quote')
-    author     = author or 'Unknown'
-    qtype      = qtype or 'N/A'
+    # Extract fields assuming dict structure
+    quote_text = data.get('quote', 'No quote') if isinstance(data, dict) else 'No quote'
+    author     = data.get('author', 'Unknown') if isinstance(data, dict) else 'Unknown'
+    qtype      = data.get('type', 'N/A') if isinstance(data, dict) else 'N/A'
 
     hook = PostgresHook(postgres_conn_id='postgres_default')
     conn = hook.get_conn()
     cur  = conn.cursor()
 
-    # Create table if not exists
     cur.execute("""
         CREATE TABLE IF NOT EXISTS self_confidence (
             id SERIAL PRIMARY KEY,
@@ -121,7 +107,6 @@ def load_to_postgres(**kwargs):
         )
     """)
 
-    # Insert record
     cur.execute("""
         INSERT INTO self_confidence (quote, author, type)
         VALUES (%s, %s, %s)
