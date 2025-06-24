@@ -32,7 +32,6 @@ def fetch_quote(**kwargs):
     }
 
     response = requests.get(url, headers=headers, params=querystring)
-    response.raise_for_status()
     quote_data = response.json()
     kwargs['ti'].xcom_push(key='quote_data', value=quote_data)
 
@@ -41,35 +40,18 @@ def send_quote_as_text_email(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
 
-    # Normalize the payload structure
-    if isinstance(data, list) and data:
-        record = data[0]
-    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
-        record = data['data'][0]
-    elif isinstance(data, dict):
-        record = data
-    else:
-        record = {}
-
-    # Extract fields with defaults
-    quote_text = record.get('quote') or record.get('text') or 'No quote found.'
-    author     = record.get('author', 'Unknown')
-    qtype      = record.get('type') or record.get('category') or 'N/A'
-
-    # Load email configuration
     email_config = Variable.get("email_config", deserialize_json=True)
-    smtp_host    = email_config['smtp_host']
-    smtp_port    = email_config['smtp_port']
-    smtp_user    = email_config['smtp_user']
-    smtp_password= email_config['smtp_password']
-    sender_email = email_config['sender_email']
-    receiver_email = email_config['receiver_email']
+    smtp_host     = email_config['smtp_host']
+    smtp_port     = email_config['smtp_port']
+    smtp_user     = email_config['smtp_user']
+    smtp_password = email_config['smtp_password']
+    sender_email  = email_config['sender_email']
+    receiver_email= email_config['receiver_email']
 
-    body = (
-        f"Here is your daily self-confidence quote:\n\n"
-        f"\"{quote_text}\"\n\n"
-        f"- {author} ({qtype})"
-    )
+    quote  = data.get('quote', 'No quote found.')
+    author = data.get('author', 'Unknown')
+    qtype  = data.get('type', 'N/A')
+    body   = f"Here is your daily self-confidence quote:\n\n\"{quote}\"\n\n- {author} ({qtype})"
 
     msg = MIMEMultipart()
     msg['Subject'] = 'Daily Self-Confidence Quote'
@@ -97,25 +79,26 @@ def load_to_postgres(**kwargs):
     ti   = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
 
-    # Handle different data structures returned by the API
-    if isinstance(data, list) and data:
-        record = data[0]
-    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
-        record = data['data'][0]
-    elif isinstance(data, dict):
-        record = data
-    else:
-        raise RuntimeError(f"Unexpected XCom data format: {data!r}")
+    # Safely extract quote, author, type from whatever structure
+    try:
+        quote_text = data.get('quote')
+        author     = data.get('author')
+        qtype      = data.get('type')
+    except AttributeError:
+        # If data isn't a dict, fallback
+        quote_text = None
+        author = None
+        qtype = None
 
-    # Extract fields with defaults
-    quote_text = record.get('quote') or record.get('text') or 'No quote'
-    author     = record.get('author', 'Unknown')
-    qtype      = record.get('type') or record.get('category') or 'N/A'
+    quote_text = quote_text or (data[0].get('quote') if isinstance(data, list) and data else 'No quote')
+    author     = author or 'Unknown'
+    qtype      = qtype or 'N/A'
 
     hook = PostgresHook(postgres_conn_id='postgres_default')
     conn = hook.get_conn()
     cur  = conn.cursor()
 
+    # Create table if not exists
     cur.execute("""
         CREATE TABLE IF NOT EXISTS self_confidence (
             id SERIAL PRIMARY KEY,
@@ -125,6 +108,7 @@ def load_to_postgres(**kwargs):
         )
     """)
 
+    # Insert record
     cur.execute("""
         INSERT INTO self_confidence (quote, author, type)
         VALUES (%s, %s, %s)
