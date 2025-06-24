@@ -34,16 +34,26 @@ def fetch_quote(**kwargs):
     """
     Task 1: Fetch quote from API and push to XCom
     """
+    api_key = Variable.get('quotes_api_key', default_var=None)
+    if not api_key:
+        raise ValueError("Airflow Variable 'quotes_api_key' is missing. Please set it to your RapidAPI key.")
+
     url = "https://quotes-api12.p.rapidapi.com/quotes/random"
     params = {"type": "selfconfidence"}
     headers = {
-        "x-rapidapi-key": Variable.get('quotes_api_key', default_var=''),
+        "x-rapidapi-key": api_key,
         "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
     }
+
     response = requests.get(url, headers=headers, params=params)
-    response.raise_for_status()
+    try:
+        response.raise_for_status()
+    except requests.HTTPError:
+        # Log for debugging before failing
+        print(f"Quote API returned {response.status_code}: {response.text}")
+        raise
+
     data = response.json()
-    # push raw quote data
     ti = kwargs['ti']
     ti.xcom_push(key='quote_data', value=data)
 
@@ -55,30 +65,32 @@ def send_quote_as_text_email(**kwargs):
     ti = kwargs['ti']
     data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
 
-    # Load email config from Airflow Variable
-    email_config = Variable.get("email_config", deserialize_json=True)
-    smtp_host      = email_config['smtp_host']
-    smtp_port      = int(email_config['smtp_port'])
-    smtp_user      = email_config['smtp_user']
-    smtp_password  = email_config['smtp_password']
-    sender_email   = email_config['sender_email']
-    receiver_emails= email_config['receiver_email']  # list of emails
+    email_config = Variable.get("email_config", default_var={}, deserialize_json=True)
+    if not email_config:
+        raise ValueError("Airflow Variable 'email_config' is missing or empty.")
 
-    # Extract quote fields with defaults
-    quote  = data.get('quote') or data.get('text') or 'No quote found.'
+    smtp_host       = email_config.get('smtp_host')
+    smtp_port       = int(email_config.get('smtp_port', 587))
+    smtp_user       = email_config.get('smtp_user')
+    smtp_password   = email_config.get('smtp_password')
+    sender_email    = email_config.get('sender_email')
+    receiver_emails = email_config.get('receiver_email', [])
+
+    if not all([smtp_host, smtp_user, smtp_password, sender_email, receiver_emails]):
+        raise ValueError("Incomplete email_config: ensure smtp_host, smtp_user, smtp_password, sender_email, and receiver_email are set.")
+
+    quote = data.get('quote') or data.get('text') or 'No quote found.'
     author = data.get('author', 'Unknown')
-    qtype  = data.get('type') or data.get('category') or 'N/A'
+    qtype = data.get('type') or data.get('category') or 'N/A'
 
     body = f"Here is your daily self-confidence quote:\n\n\"{quote}\"\n\n- {author} ({qtype})"
 
-    # Compose email
     msg = MIMEMultipart()
     msg['Subject'] = 'Daily Self-Confidence Quote'
     msg['From']    = sender_email
     msg['To']      = ", ".join(receiver_emails)
     msg.attach(MIMEText(body, 'plain'))
 
-    # Send email
     if smtp_port == 465:
         server = smtplib.SMTP_SSL(smtp_host, smtp_port)
     else:
@@ -116,7 +128,6 @@ def load_to_postgres(**kwargs):
     conn = hook.get_conn()
     cur  = conn.cursor()
 
-    # Create table if not exists
     cur.execute("""
         CREATE TABLE IF NOT EXISTS self_confidence (
             id SERIAL PRIMARY KEY,
@@ -124,8 +135,8 @@ def load_to_postgres(**kwargs):
             author TEXT,
             type TEXT
         )
-    """)
-    # Insert record
+    """
+    )
     cur.execute(
         "INSERT INTO self_confidence (quote, author, type) VALUES (%s, %s, %s)",
         (quote_text, author, qtype)
