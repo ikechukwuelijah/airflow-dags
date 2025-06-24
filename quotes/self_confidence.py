@@ -1,124 +1,160 @@
 from datetime import datetime
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.operators.email import EmailOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
 from airflow.models import Variable
 import requests
-import psycopg2
+import pandas as pd
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 # Default arguments for the DAG
 default_args = {
-    'owner': 'ike',
+    'owner': 'Ike',
+    'start_date': datetime(2025, 6, 18),
+    'retries': 1,
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
 }
 
-# Fetch email settings and recipients from Airflow Variables with defaults
-EMAIL_RECIPIENTS = Variable.get(
-    "self_confidence_recipients",
-    default_var='[]',
-    deserialize_json=True
-)
-EMAIL_CONFIG = {
-    'smtp_host': Variable.get("smtp_host", default_var="smtp.example.com"),
-    'smtp_port': Variable.get("smtp_port", default_var="587"),
-    'smtp_user': Variable.get("smtp_user", default_var="user@example.com"),
-    'smtp_password': Variable.get("smtp_password", default_var="changeme"),
-    'smtp_mail_from': Variable.get("smtp_mail_from", default_var="noreply@example.com"),
-}
-
 # Define the DAG
-with DAG(
-    dag_id='self_confidence_quote_etl',
+dag = DAG(
+    dag_id='self_confidence_dag',
     default_args=default_args,
-    description='Daily ETL of self-confidence quotes into Postgres and email notification',
+    description='Daily ETL: fetch self-confidence quote, send text email, and load to Postgres',
     schedule_interval='@daily',
-    start_date=datetime(2025, 6, 24),
     catchup=False,
     tags=['etl', 'quotes', 'self_confidence'],
-) as dag:
+)
 
-    def fetch_quote(**kwargs):
-        url = "https://quotes-api12.p.rapidapi.com/quotes/random"
-        headers = {
-            "x-rapidapi-key": Variable.get("quotes_api_key", default_var=""),
-            "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
-        }
-        params = {"type": "selfconfidence"}
-        response = requests.get(url, headers=headers, params=params)
-        response.raise_for_status()
-        data = response.json()
 
-        ti = kwargs['ti']
-        ti.xcom_push(key='quote_text', value=data.get('quote', ''))
-        ti.xcom_push(key='quote_author', value=data.get('author', ''))
-        ti.xcom_push(key='quote_type', value=data.get('type', ''))
+def fetch_quote(**kwargs):
+    """
+    Task 1: Fetch quote from API and push to XCom
+    """
+    url = "https://quotes-api12.p.rapidapi.com/quotes/random"
+    params = {"type": "selfconfidence"}
+    headers = {
+        "x-rapidapi-key": Variable.get('quotes_api_key', default_var=''),
+        "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
+    }
+    response = requests.get(url, headers=headers, params=params)
+    response.raise_for_status()
+    data = response.json()
+    # push raw quote data
+    ti = kwargs['ti']
+    ti.xcom_push(key='quote_data', value=data)
 
-    def insert_to_db(**kwargs):
-        ti = kwargs['ti']
-        quote = ti.xcom_pull(key='quote_text', task_ids='fetch_quote')
-        author = ti.xcom_pull(key='quote_author', task_ids='fetch_quote')
-        qtype = ti.xcom_pull(key='quote_type', task_ids='fetch_quote')
 
-        conn = psycopg2.connect(
-            dbname=Variable.get("db_name", default_var="dwh"),
-            user=Variable.get("db_user", default_var="postgres"),
-            password=Variable.get("db_password", default_var=""),
-            host=Variable.get("db_host", default_var="127.0.0.1"),
-            port=Variable.get("db_port", default_var="5432")
+def send_quote_as_text_email(**kwargs):
+    """
+    Task 2: Send quote as plain text email to multiple recipients
+    """
+    ti = kwargs['ti']
+    data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
+
+    # Load email config from Airflow Variable
+    email_config = Variable.get("email_config", deserialize_json=True)
+    smtp_host      = email_config['smtp_host']
+    smtp_port      = int(email_config['smtp_port'])
+    smtp_user      = email_config['smtp_user']
+    smtp_password  = email_config['smtp_password']
+    sender_email   = email_config['sender_email']
+    receiver_emails= email_config['receiver_email']  # list of emails
+
+    # Extract quote fields with defaults
+    quote  = data.get('quote') or data.get('text') or 'No quote found.'
+    author = data.get('author', 'Unknown')
+    qtype  = data.get('type') or data.get('category') or 'N/A'
+
+    body = f"Here is your daily self-confidence quote:\n\n\"{quote}\"\n\n- {author} ({qtype})"
+
+    # Compose email
+    msg = MIMEMultipart()
+    msg['Subject'] = 'Daily Self-Confidence Quote'
+    msg['From']    = sender_email
+    msg['To']      = ", ".join(receiver_emails)
+    msg.attach(MIMEText(body, 'plain'))
+
+    # Send email
+    if smtp_port == 465:
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port)
+    else:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+
+    server.login(smtp_user, smtp_password)
+    server.sendmail(sender_email, receiver_emails, msg.as_string())
+    server.quit()
+    print("Text email sent successfully")
+
+
+def load_to_postgres(**kwargs):
+    """
+    Task 3: Load the quote record into Postgres
+    """
+    ti = kwargs['ti']
+    data = ti.xcom_pull(task_ids='fetch_quote', key='quote_data')
+
+    # Normalize data structure
+    if isinstance(data, list) and data:
+        record = data[0]
+    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
+        record = data['data'][0]
+    elif isinstance(data, dict):
+        record = data
+    else:
+        raise RuntimeError(f"Unexpected XCom data format: {data!r}")
+
+    quote_text = record.get('quote') or record.get('text') or 'No quote'
+    author     = record.get('author', 'Unknown')
+    qtype      = record.get('type') or record.get('category') or 'N/A'
+
+    hook = PostgresHook(postgres_conn_id='postgres_default')
+    conn = hook.get_conn()
+    cur  = conn.cursor()
+
+    # Create table if not exists
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS self_confidence (
+            id SERIAL PRIMARY KEY,
+            quote TEXT,
+            author TEXT,
+            type TEXT
         )
-        cur = conn.cursor()
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS self_confidence (
-                id SERIAL PRIMARY KEY,
-                quote TEXT,
-                author TEXT,
-                type TEXT
-            )
-        """)
-
-        cur.execute(
-            """
-            INSERT INTO self_confidence (quote, author, type)
-            VALUES (%s, %s, %s)
-            """,
-            (quote, author, qtype)
-        )
-
-        conn.commit()
-        cur.close()
-        conn.close()
-
-    def compose_email(**kwargs):
-        ti = kwargs['ti']
-        quote = ti.xcom_pull(key='quote_text', task_ids='fetch_quote')
-        author = ti.xcom_pull(key='quote_author', task_ids='fetch_quote')
-        return f"\"{quote}\" - {author}"
-
-    fetch_task = PythonOperator(
-        task_id='fetch_quote',
-        python_callable=fetch_quote,
-        provide_context=True,
+    """)
+    # Insert record
+    cur.execute(
+        "INSERT INTO self_confidence (quote, author, type) VALUES (%s, %s, %s)",
+        (quote_text, author, qtype)
     )
+    conn.commit()
+    cur.close()
+    conn.close()
 
-    insert_task = PythonOperator(
-        task_id='insert_to_db',
-        python_callable=insert_to_db,
-        provide_context=True,
-    )
+# Define tasks
+fetch_task = PythonOperator(
+    task_id='fetch_quote',
+    python_callable=fetch_quote,
+    provide_context=True,
+    dag=dag
+)
 
-    email_task = EmailOperator(
-        task_id='send_email',
-        to=EMAIL_RECIPIENTS,
-        subject='Daily Self-Confidence Quote',
-        html_content="{{ task_instance.xcom_pull(task_ids='fetch_quote', key='quote_text') }} - {{ task_instance.xcom_pull(task_ids='fetch_quote', key='quote_author') }}",
-        smtp_host=EMAIL_CONFIG['smtp_host'],
-        smtp_port=int(EMAIL_CONFIG['smtp_port']),
-        smtp_user=EMAIL_CONFIG['smtp_user'],
-        smtp_password=EMAIL_CONFIG['smtp_password'],
-        smtp_mail_from=EMAIL_CONFIG['smtp_mail_from'],
-    )
+email_task = PythonOperator(
+    task_id='send_text_email',
+    python_callable=send_quote_as_text_email,
+    provide_context=True,
+    dag=dag
+)
 
-    fetch_task >> insert_task >> email_task
+load_task = PythonOperator(
+    task_id='load_quote',
+    python_callable=load_to_postgres,
+    provide_context=True,
+    dag=dag
+)
+
+# Set task dependencies
+fetch_task >> [email_task, load_task]
