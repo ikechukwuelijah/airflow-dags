@@ -32,8 +32,21 @@ def fetch_quote(**kwargs):
     }
 
     response = requests.get(url, headers=headers, params=querystring)
-    quote_data = response.json()
-    kwargs['ti'].xcom_push(key='quote_data', value=quote_data)
+    response.raise_for_status()
+    data = response.json()
+
+    # Normalize to a single record dict
+    if isinstance(data, list) and data:
+        record = data[0]
+    elif isinstance(data, dict) and 'data' in data and isinstance(data['data'], list) and data['data']:
+        record = data['data'][0]
+    elif isinstance(data, dict):
+        record = data
+    else:
+        record = {}
+
+    # Push only the normalized record to XCom
+    kwargs['ti'].xcom_push(key='quote_data', value=record)
 
 # Task 2: Send plain text email
 def send_quote_as_text_email(**kwargs):
