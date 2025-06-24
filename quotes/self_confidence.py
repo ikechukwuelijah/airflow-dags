@@ -14,14 +14,18 @@ default_args = {
     'email_on_retry': False,
 }
 
-# Fetch email settings and recipients from Airflow Variables
-EMAIL_RECIPIENTS = Variable.get("self_confidence_recipients", deserialize_json=True)
+# Fetch email settings and recipients from Airflow Variables with defaults
+EMAIL_RECIPIENTS = Variable.get(
+    "self_confidence_recipients",
+    default_var='[]',
+    deserialize_json=True
+)
 EMAIL_CONFIG = {
-    'smtp_host': Variable.get("smtp_host"),
-    'smtp_port': Variable.get("smtp_port"),
-    'smtp_user': Variable.get("smtp_user"),
-    'smtp_password': Variable.get("smtp_password"),
-    'smtp_mail_from': Variable.get("smtp_mail_from"),
+    'smtp_host': Variable.get("smtp_host", default_var="smtp.example.com"),
+    'smtp_port': Variable.get("smtp_port", default_var="587"),
+    'smtp_user': Variable.get("smtp_user", default_var="user@example.com"),
+    'smtp_password': Variable.get("smtp_password", default_var="changeme"),
+    'smtp_mail_from': Variable.get("smtp_mail_from", default_var="noreply@example.com"),
 }
 
 # Define the DAG
@@ -29,8 +33,8 @@ with DAG(
     dag_id='self_confidence_quote_etl',
     default_args=default_args,
     description='Daily ETL of self-confidence quotes into Postgres and email notification',
-    schedule_interval='@daily',  # runs once every day
-    start_date=datetime(2025, 6, 24),  # start today
+    schedule_interval='@daily',
+    start_date=datetime(2025, 6, 24),
     catchup=False,
     tags=['etl', 'quotes', 'self_confidence'],
 ) as dag:
@@ -38,7 +42,7 @@ with DAG(
     def fetch_quote(**kwargs):
         url = "https://quotes-api12.p.rapidapi.com/quotes/random"
         headers = {
-            "x-rapidapi-key": Variable.get("quotes_api_key"),
+            "x-rapidapi-key": Variable.get("quotes_api_key", default_var=""),
             "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
         }
         params = {"type": "selfconfidence"}
@@ -46,11 +50,10 @@ with DAG(
         response.raise_for_status()
         data = response.json()
 
-        # Push to XCom
         ti = kwargs['ti']
-        ti.xcom_push(key='quote_text', value=data['quote'])
-        ti.xcom_push(key='quote_author', value=data['author'])
-        ti.xcom_push(key='quote_type', value=data.get('type'))
+        ti.xcom_push(key='quote_text', value=data.get('quote', ''))
+        ti.xcom_push(key='quote_author', value=data.get('author', ''))
+        ti.xcom_push(key='quote_type', value=data.get('type', ''))
 
     def insert_to_db(**kwargs):
         ti = kwargs['ti']
@@ -59,11 +62,11 @@ with DAG(
         qtype = ti.xcom_pull(key='quote_type', task_ids='fetch_quote')
 
         conn = psycopg2.connect(
-            dbname=Variable.get("db_name"),
-            user=Variable.get("db_user"),
-            password=Variable.get("db_password"),
-            host=Variable.get("db_host"),
-            port=Variable.get("db_port")
+            dbname=Variable.get("db_name", default_var="dwh"),
+            user=Variable.get("db_user", default_var="postgres"),
+            password=Variable.get("db_password", default_var=""),
+            host=Variable.get("db_host", default_var="127.0.0.1"),
+            port=Variable.get("db_port", default_var="5432")
         )
         cur = conn.cursor()
 
