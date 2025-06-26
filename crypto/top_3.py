@@ -16,7 +16,7 @@ default_args = {
 }
 
 dag = DAG(
-    dag_id='crypto_price_history_dag',
+    dag_id='crypto_price_dag',
     default_args=default_args,
     description='Fetch hourly crypto prices and append to a history table',
     schedule_interval=timedelta(hours=1),
