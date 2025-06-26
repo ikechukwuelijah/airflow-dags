@@ -1,8 +1,8 @@
-from datetime import timedelta, datetime
-
+from datetime import timedelta
 from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.utils.dates import days_ago
 import requests
 
 default_args = {
@@ -47,7 +47,6 @@ with DAG(
 
         hook = PostgresHook(postgres_conn_id='postgres_default')
 
-        # 1) Ensure table exists with a timestamp column
         hook.run("""
             CREATE TABLE IF NOT EXISTS crypto_prices (
                 symbol     TEXT PRIMARY KEY,
@@ -57,7 +56,6 @@ with DAG(
             );
         """)
 
-        # 2) Upsert each record, updating the timestamp
         upsert_sql = """
             INSERT INTO crypto_prices (symbol, price_usd, change_24h)
             VALUES (%s, %s, %s)
