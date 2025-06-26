@@ -24,7 +24,11 @@ with DAG(
     tags=['crypto', 'etl'],
 ) as dag:
 
-    def fetch_crypto_prices() -> list[dict]:
+    def fetch_crypto_prices(**kwargs):
+        """
+        Fetches latest BTC, ETH, BNB prices (USD + 24h change) from CoinGecko.
+        Returns a list of dicts: [{'symbol', 'price_usd', 'change_24h'}, …]
+        """
         url = "https://api.coingecko.com/api/v3/simple/price"
         params = {
             'ids': 'bitcoin,ethereum,binancecoin',
@@ -35,27 +39,38 @@ with DAG(
         resp.raise_for_status()
         data = resp.json()
         return [
-            {'symbol': 'BTC', 'price_usd': data['bitcoin']['usd'], 'change_24h': data['bitcoin']['usd_24h_change']},
-            {'symbol': 'ETH', 'price_usd': data['ethereum']['usd'], 'change_24h': data['ethereum']['usd_24h_change']},
-            {'symbol': 'BNB', 'price_usd': data['binancecoin']['usd'], 'change_24h': data['binancecoin']['usd_24h_change']},
+            {'symbol': 'BTC', 'price_usd': data['bitcoin']['usd'],      'change_24h': data['bitcoin']['usd_24h_change']},
+            {'symbol': 'ETH', 'price_usd': data['ethereum']['usd'],     'change_24h': data['ethereum']['usd_24h_change']},
+            {'symbol': 'BNB', 'price_usd': data['binancecoin']['usd'],  'change_24h': data['binancecoin']['usd_24h_change']},
         ]
 
     def insert_into_postgres(ti, **kwargs):
+        """
+        Ensures crypto_prices table exists (with timestamp column),
+        then upserts each record, updating the timestamp to NOW().
+        """
         crypto_data = ti.xcom_pull(task_ids='fetch_crypto_prices')
         if not crypto_data:
             raise ValueError("No data received from fetch_crypto_prices")
 
         hook = PostgresHook(postgres_conn_id='postgres_default')
 
+        # 1) Create table if it doesn't exist (without timestamp)
         hook.run("""
             CREATE TABLE IF NOT EXISTS crypto_prices (
                 symbol     TEXT PRIMARY KEY,
                 price_usd  NUMERIC,
-                change_24h NUMERIC,
-                timestamp  TIMESTAMPTZ DEFAULT NOW()
+                change_24h NUMERIC
             );
         """)
 
+        # 2) Add timestamp column if missing
+        hook.run("""
+            ALTER TABLE crypto_prices
+            ADD COLUMN IF NOT EXISTS timestamp TIMESTAMPTZ DEFAULT NOW();
+        """)
+
+        # 3) Upsert each record, bumping timestamp
         upsert_sql = """
             INSERT INTO crypto_prices (symbol, price_usd, change_24h)
             VALUES (%s, %s, %s)
@@ -76,7 +91,6 @@ with DAG(
     insert_task = PythonOperator(
         task_id='insert_into_postgres',
         python_callable=insert_into_postgres,
-        provide_context=True,
     )
 
     fetch_task >> insert_task
