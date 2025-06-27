@@ -9,9 +9,9 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
-# WSL path to your Windows project exports folder
+# Correct WSL path to your Windows project exports folder
 EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/pay_out")
-# Target Postgres table name
+# Target Postgres table name (matches your DB)
 TABLE_NAME = "pay_out"
 
 # Default DAG args
@@ -37,7 +37,12 @@ with DAG(
         Finds the latest export CSV in EXPORT_DIR, loads into DataFrame,
         normalizes column names, and pushes records to XCom.
         """
+        # sanity-check path
         if not EXPORT_DIR.exists():
+            # print directory listing for debugging
+            parent = EXPORT_DIR.parent
+            print(f"Looking in parent folder: {parent}")
+            print("Contents:", [p.name for p in parent.iterdir()])
             raise FileNotFoundError(f"Export directory not found: {EXPORT_DIR}")
         files = list(EXPORT_DIR.glob('export-*.csv'))
         if not files:
