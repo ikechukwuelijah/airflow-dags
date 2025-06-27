@@ -10,38 +10,7 @@ from psycopg2.extras import execute_values
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
 # WSL path to your Windows project exports folder
-EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/pay_out")
-# Target table name in Postgres
-TABLE_NAME = "pay_out"
-
-# Default DAG args
-default_args = {
-    'owner': 'Ike',
-    'depends_on_past': False,
-    'email_on_failure': False,
-    'email_on_retry': False,
-}
-
-with DAG(
-    dag_id='pay_out_etl',
-    default_args=default_args,
-    description='Weekly ETL for pay_out CSV into Postgres',
-    schedule_interval='0 0 * * 2',  # every Tuesday at midnight
-    start_date=datetime(2025, 6, 17),  # a Tuesday
-    catchup=False,
-    tags=['etl', 'weekly', 'pay_out', 'jumia', 'xmd'],
-) as dag:
-
-    def fetch_and_normalize(**kwargs):
-        """
-        Finds the latest export CSV in EXPORT_DIR, loads into DataFrame,
-        normalizes column names, and pushes records to XCom.
-        """
-        if not EXPORT_DIR.exists():
-            raise FileNotFoundError(f"Export directory not found: {EXPORT_DIR}")
-        files = list(EXPORT_DIR.glob('export-*.csv'))
-        if not files:
-            raise FileNotFoundError(f"No files matching 'export-*.csv' in {EXPORT_DIR}")
+EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/weekly_pay")
         latest = max(files, key=lambda p: p.stat().st_mtime)
         df = pd.read_csv(latest)
         df.columns = [c.strip().lower().replace(' ', '_').replace('.', '') for c in df.columns]
