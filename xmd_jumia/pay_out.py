@@ -9,7 +9,7 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
-# WSL path to your Windows project exports folder
+# Use the correct WSL path to the Windows exports folder
 EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/pay_out")
 # Target Postgres table name (matches your DB)
 TABLE_NAME = "pay_out"
@@ -34,10 +34,8 @@ with DAG(
 
     def fetch_and_normalize(**kwargs):
         """
-        Finds the latest export CSV in EXPORT_DIR, loads into DataFrame,
-        normalizes column names, and pushes records to XCom.
+        Fetches the latest export CSV and pushes normalized records via XCom.
         """
-        # Sanity-check path exists
         if not EXPORT_DIR.exists():
             raise FileNotFoundError(f"Export directory not found: {EXPORT_DIR}")
         files = list(EXPORT_DIR.glob('export-*.csv'))
@@ -45,25 +43,21 @@ with DAG(
             raise FileNotFoundError(f"No files matching 'export-*.csv' in {EXPORT_DIR}")
         latest = max(files, key=lambda p: p.stat().st_mtime)
         df = pd.read_csv(latest)
-        # normalize column names to snake_case
         df.columns = [c.strip().lower().replace(' ', '_').replace('.', '') for c in df.columns]
-        # push list of record dicts to XCom
         kwargs['ti'].xcom_push(key='records', value=df.to_dict(orient='records'))
 
     def load_to_postgres(**kwargs):
         """
-        Pulls records from XCom, ensures target table and dynamic columns,
-        and bulk-inserts data into Postgres.
+        Loads records from XCom into Postgres, evolving schema as needed.
         """
         records = kwargs['ti'].xcom_pull(task_ids='fetch_and_normalize', key='records')
         if not records:
             raise ValueError('No records found in XCom')
-
         hook = PostgresHook(postgres_conn_id='postgres_default')
         conn = hook.get_conn()
         cur = conn.cursor()
 
-        # Create base table if not exists
+        # Create base table
         cur.execute(sql.SQL(
             """
             CREATE TABLE IF NOT EXISTS {table} (
@@ -83,17 +77,14 @@ with DAG(
         )
         existing = {row[0] for row in cur.fetchall()}
 
-        # Add any new columns as TEXT
+        # Add new columns
         for col in records[0].keys():
             if col not in existing:
                 cur.execute(sql.SQL(
                     "ALTER TABLE {table} ADD COLUMN {col} TEXT;"
-                ).format(
-                    table=sql.Identifier(TABLE_NAME),
-                    col=sql.Identifier(col)
-                ))
+                ).format(table=sql.Identifier(TABLE_NAME), col=sql.Identifier(col)))
 
-        # Bulk insert records
+        # Bulk insert
         cols = list(records[0].keys())
         insert_stmt = sql.SQL('INSERT INTO {table} ({fields}) VALUES %s').format(
             table=sql.Identifier(TABLE_NAME),
