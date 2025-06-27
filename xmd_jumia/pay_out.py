@@ -9,7 +9,9 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
+# WSL path to your Windows project exports folder
 EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/pay_out")
+# Target table name in Postgres
 TABLE_NAME = "pay_out"
 
 # Default DAG args
@@ -32,8 +34,8 @@ with DAG(
 
     def fetch_and_normalize(**kwargs):
         """
-        Finds the latest export CSV, loads into DataFrame, normalizes columns,
-        and pushes records to XCom.
+        Finds the latest export CSV in EXPORT_DIR, loads into DataFrame,
+        normalizes column names, and pushes records to XCom.
         """
         if not EXPORT_DIR.exists():
             raise FileNotFoundError(f"Export directory not found: {EXPORT_DIR}")
@@ -43,20 +45,23 @@ with DAG(
         latest = max(files, key=lambda p: p.stat().st_mtime)
         df = pd.read_csv(latest)
         df.columns = [c.strip().lower().replace(' ', '_').replace('.', '') for c in df.columns]
-        # push list of record dicts
+        # push list of record dicts to XCom
         kwargs['ti'].xcom_push(key='records', value=df.to_dict(orient='records'))
 
     def load_to_postgres(**kwargs):
         """
-        Pulls records from XCom, ensures target table and columns, and bulk-inserts data.
+        Pulls records from XCom, ensures target table and dynamic columns,
+        and bulk-inserts data into Postgres.
         """
         records = kwargs['ti'].xcom_pull(task_ids='fetch_and_normalize', key='records')
         if not records:
             raise ValueError('No records found in XCom')
+
         hook = PostgresHook(postgres_conn_id='postgres_default')
         conn = hook.get_conn()
         cur = conn.cursor()
-        # create base table
+
+        # Create base table if not exists
         cur.execute(sql.SQL("""
             CREATE TABLE IF NOT EXISTS {table} (
                 id SERIAL PRIMARY KEY,
@@ -64,28 +69,36 @@ with DAG(
             )
         """
         ).format(table=sql.Identifier(TABLE_NAME)))
-        # existing cols
-        cur.execute("""
-            SELECT column_name
-              FROM information_schema.columns
-             WHERE table_name = %s
-        """, [TABLE_NAME])
-        existing = {r[0] for r in cur.fetchall()}
-        # add any new columns
-        columns = records[0].keys()
-        for col in columns:
+
+        # Discover existing columns
+        cur.execute(
+            """
+            SELECT column_name FROM information_schema.columns
+            WHERE table_name = %s
+            """,
+            [TABLE_NAME]
+        )
+        existing = {row[0] for row in cur.fetchall()}
+
+        # Add any new columns as TEXT
+        for col in records[0].keys():
             if col not in existing:
                 cur.execute(sql.SQL(
                     "ALTER TABLE {table} ADD COLUMN {col} TEXT;"
-                ).format(table=sql.Identifier(TABLE_NAME), col=sql.Identifier(col)))
-        # bulk insert
-        cols = list(columns)
+                ).format(
+                    table=sql.Identifier(TABLE_NAME),
+                    col=sql.Identifier(col)
+                ))
+
+        # Bulk insert records
+        cols = list(records[0].keys())
         insert_stmt = sql.SQL('INSERT INTO {table} ({fields}) VALUES %s').format(
             table=sql.Identifier(TABLE_NAME),
             fields=sql.SQL(', ').join(map(sql.Identifier, cols))
         )
         values = [tuple(str(rec.get(c)) if rec.get(c) is not None else None for c in cols) for rec in records]
         execute_values(cur, insert_stmt, values)
+
         conn.commit()
         cur.close()
         conn.close()
