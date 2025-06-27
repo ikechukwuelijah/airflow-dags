@@ -9,7 +9,7 @@ from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 # ─── Configuration ─────────────────────────────────────────────────────────────
-# Correct WSL path to your Windows project exports folder
+# WSL path to your Windows project exports folder
 EXPORT_DIR = Path("/mnt/c/DEprojects/xmd_jumia/pay_out")
 # Target Postgres table name (matches your DB)
 TABLE_NAME = "pay_out"
@@ -37,18 +37,15 @@ with DAG(
         Finds the latest export CSV in EXPORT_DIR, loads into DataFrame,
         normalizes column names, and pushes records to XCom.
         """
-        # sanity-check path
+        # Sanity-check path exists
         if not EXPORT_DIR.exists():
-            # print directory listing for debugging
-            parent = EXPORT_DIR.parent
-            print(f"Looking in parent folder: {parent}")
-            print("Contents:", [p.name for p in parent.iterdir()])
             raise FileNotFoundError(f"Export directory not found: {EXPORT_DIR}")
         files = list(EXPORT_DIR.glob('export-*.csv'))
         if not files:
             raise FileNotFoundError(f"No files matching 'export-*.csv' in {EXPORT_DIR}")
         latest = max(files, key=lambda p: p.stat().st_mtime)
         df = pd.read_csv(latest)
+        # normalize column names to snake_case
         df.columns = [c.strip().lower().replace(' ', '_').replace('.', '') for c in df.columns]
         # push list of record dicts to XCom
         kwargs['ti'].xcom_push(key='records', value=df.to_dict(orient='records'))
@@ -67,12 +64,13 @@ with DAG(
         cur = conn.cursor()
 
         # Create base table if not exists
-        cur.execute(sql.SQL("""
+        cur.execute(sql.SQL(
+            """
             CREATE TABLE IF NOT EXISTS {table} (
                 id SERIAL PRIMARY KEY,
                 loaded_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
-        """
+            """
         ).format(table=sql.Identifier(TABLE_NAME)))
 
         # Discover existing columns
