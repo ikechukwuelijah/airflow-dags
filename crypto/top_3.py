@@ -59,7 +59,7 @@ def append_to_postgres(ti, **kwargs):
 
     # Create a dedicated history table (no unique constraint on symbol)
     hook.run("""
-        CREATE TABLE IF NOT EXISTS crypto_price_history (
+        CREATE TABLE IF NOT EXISTS crypto (
             id         SERIAL PRIMARY KEY,
             symbol     TEXT NOT NULL,
             price_usd  NUMERIC NOT NULL,
@@ -70,7 +70,7 @@ def append_to_postgres(ti, **kwargs):
 
     # Insert new records to maintain full history
     insert_sql = """
-        INSERT INTO crypto_price_history (symbol, price_usd, change_24h)
+        INSERT INTO crypto (symbol, price_usd, change_24h)
         VALUES (%s, %s, %s);
     """
 
