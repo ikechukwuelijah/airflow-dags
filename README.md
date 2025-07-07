@@ -35,5 +35,5 @@ A mix of practical DAGs and experimental scrapes, including:
 - PostgreSQL
 - Docker
 - Metabase
-- linus
+- Linus
 
