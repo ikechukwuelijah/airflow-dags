@@ -14,6 +14,7 @@ A mix of practical DAGs and experimental scrapes, including:
 | `us_stock_market`      | Pulls US stock data (e.g. S&P 500, NASDAQ) for dashboarding       |
 | `air_pollution_reverse`| Reconstructs UK air quality dataset from open APIs               |
 | `self_confidence_quotes`| Loads curated inspirational quotes into a DB for wellness apps  |
+|`vehicleDB_pipeline`   | Tracks latest vehicle models from API by type and model year     |
 
 ..and more.
 
@@ -32,7 +33,6 @@ A mix of practical DAGs and experimental scrapes, including:
 - Apache Airflow 2.x
 - Python 3.8+
 - PostgreSQL
-- Requests, Pandas, SQLAlchemy
 - Docker
 - Metabase
 - linus
