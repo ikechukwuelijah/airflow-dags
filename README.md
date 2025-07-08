@@ -1,6 +1,6 @@
 # 💡 Airflow DAGs Playground
 
-Welcome to my ever-growing playground of Apache Airflow DAGs — a space where I explore, prototype, and refine real-world data workflows across e-commerce, finance, wellness, and beyond.
+Welcome to my ever-growing playground of Apache Airflow DAGs - a space where I explore, prototype, and refine real-world data workflows across e-commerce, finance, wellness, and beyond.
 
 ## 🧪 What’s Inside
 
@@ -18,7 +18,7 @@ A mix of practical DAGs and experimental scrapes, including:
 
 ..and more.
 
-> New pipelines are added regularly — the goal is to blend learning with real-world relevance.
+> New pipelines are added regularly - the goal is to blend learning with real-world relevance.
 
 ## 🛠️ Tech Stack
 
