@@ -30,10 +30,15 @@ A mix of practical DAGs and experimental scrapes, including:
 
 ## 🧰 Tech Stack
 
-- Apache Airflow 2.x
-- Python 3.8+
-- PostgreSQL
-- Docker
-- Metabase
-- Linus
+| Component        | Purpose                        |
+|------------------|--------------------------------|
+| Python           | Core ETL logic and scripting               |
+| Requests         | HTTP client for API interaction                |
+| Pandas           | Data wrangling, transformation, and cleaning   |
+| SQLAlchemy       | Database ORM and connectivity abstraction           |
+| PostgreSQL       | Data warehouse / structured data storage               |
+| Apache Airflow   |Workflow orchestration and DAG scheduling |
+| Metabase       	 | Business Intelligence (BI) & data visualization |
+| Linus	Server     | Hosting / runtime environment|
+| Github	         |Version control and CI/CD pipelines                              |
 
