@@ -22,13 +22,6 @@ A mix of practical DAGs and experimental scrapes, including:
 
 ## 🛠️ Tech Stack
 
-- **Orchestrator**: Apache Airflow 2.x
-- **Language**: Python 3.8+
-- **Storage**: PostgreSQL
-- **ETL tools**: Pandas, SQLAlchemy, Requests, BeautifulSoup
-- **Dev Tools**: GitHub Actions (CI), OpenMetadata (optional), `.env` configs
-
-## 🧰 Tech Stack
 
 | Component        | Purpose                        |
 |------------------|--------------------------------|
