@@ -1,4 +1,4 @@
-# 💡 Airflow DAGs Playground
+# 💡 Airflow DAGs
 
 Welcome to my ever-growing playground of Apache Airflow DAGs - a space where I explore, prototype, and refine real-world data workflows across e-commerce, finance, wellness, and beyond.
 
