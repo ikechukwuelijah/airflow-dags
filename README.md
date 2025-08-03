@@ -30,8 +30,9 @@ A mix of practical DAGs and experimental scrapes, including:
 | Pandas           | Data wrangling, transformation, and cleaning   |
 | SQLAlchemy       | Database ORM and connectivity abstraction           |
 | PostgreSQL       | Data warehouse / structured data storage               |
-| Apache Airflow   |Workflow orchestration and DAG scheduling |
+| Apache Airflow   | Workflow orchestration and DAG scheduling |
 | Metabase       	 | Business Intelligence (BI) & data visualization |
 | Linus	Server     | Hosting / runtime environment|
-| Github	         |Version control and CI/CD pipelines                              |
+| Github	         | Version control and CI/CD pipelines                              |
+| Docker           | Containerization of services and dependencies for consistent runtime environments; enables isolated, reproducible deployments |
 
