@@ -20,7 +20,7 @@ A mix of practical DAGs and experimental scrapes, including:
 
 > New pipelines are added regularly - the goal is to blend learning with real-world relevance.
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack (Open Source Vulnerabilities)
 
 
 | Component        | Purpose                        |
