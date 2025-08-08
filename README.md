@@ -16,7 +16,7 @@ A mix of practical DAGs and experimental scrapes, including:
 | `self_confidence_quotes`| Loads curated inspirational quotes into a DB for wellness apps  |
 |`vehicleDB_pipeline`   | Tracks latest vehicle models from API by type and model year     |
 
-..and more.
+..and more..
 
 > New pipelines are added regularly - the goal is to blend learning with real-world relevance.
 
