@@ -32,7 +32,7 @@ A mix of practical DAGs and experimental scrapes, including:
 | PostgreSQL       | Data warehouse / structured data storage               |
 | Apache Airflow   | Workflow orchestration and DAG scheduling |
 | Metabase       	 | Business Intelligence (BI) & data visualization |
-| Linus	Server     | Hosting / runtime environment|
+| Linus	Server     | Hosting / runtime environment |
 | Github	         | Version control and CI/CD pipelines                              |
 | Docker           | Containerization of services and dependencies for consistent runtime environments; enables isolated, reproducible deployments |
 
