@@ -13,7 +13,7 @@ headers = {
 
 response = requests.get(url, headers=headers, params=querystring)
 
-# 2. Parse JSON and normalize into flat table
+# 2. Parse JSON and normalize into a flat table
 data = response.json()
 products = data['data']['itemList']
 
