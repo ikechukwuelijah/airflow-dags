@@ -10,7 +10,7 @@ url = "https://real-time-amazon-data.p.rapidapi.com/search"
 querystring = {"query":"Fashion","page":"1","country":"US","sort_by":"BEST_SELLERS","product_condition":"ALL","is_prime":"false","deals_and_discounts":"NONE"}
 
 headers = {
-	"x-rapidapi-key": "",
+	"x-rapidapi-key": " ",
 	"x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com"
 }
 
