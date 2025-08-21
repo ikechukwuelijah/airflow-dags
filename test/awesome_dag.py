@@ -13,7 +13,7 @@ def load():
     print("Loading data...")
 
 default_args = {
-    "owner": "Ik",
+    "owner": "Ike",
     "start_date": datetime(2025, 6, 7),
     "catchup": False,
 }
