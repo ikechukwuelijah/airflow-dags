@@ -7,7 +7,7 @@ import requests
 
 # DAG: Append-only crypto price history
 default_args = {
-    'owner': 'Ike',
+    'owner': 'Ik',
     'depends_on_past': False,
     'email_on_failure': False,
     'email_on_retry': False,
