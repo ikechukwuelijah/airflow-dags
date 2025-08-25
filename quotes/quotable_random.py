@@ -11,7 +11,7 @@ def fetch_quotes(num_quotes=10, delay_seconds=2):
     url = "https://quotes15.p.rapidapi.com/quotes/random/"
     querystring = {"language_code": "en"}
     headers = {
-        "x-rapidapi-key": "",
+        "x-rapidapi-key": " ",
         "x-rapidapi-host": "quotes15.p.rapidapi.com"
     }
 
