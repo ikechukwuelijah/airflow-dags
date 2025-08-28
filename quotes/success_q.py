@@ -6,7 +6,7 @@ def fetch_quote():
     url = "https://quotes-api12.p.rapidapi.com/quotes/random"
     querystring = {"type": "success"}
     headers = {
-        "x-rapidapi-key": "",
+        "x-rapidapi-key": " ",
         "x-rapidapi-host": "quotes-api12.p.rapidapi.com"
     }
 
