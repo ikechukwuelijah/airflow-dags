@@ -15,6 +15,7 @@ A mix of practical DAGs and experimental scrapes, including:
 | `air_pollution_reverse`| Reconstructs UK air quality dataset from open APIs               |
 | `self_confidence_quotes`| Loads curated inspirational quotes into a DB for wellness apps  |
 |`vehicleDB_pipeline`   | Tracks latest vehicle models from API by type and model year     |
+|`top_five_foothball_league`   | Prediction for the top five football leagues in Europe     |
 
 ..and more..
 
