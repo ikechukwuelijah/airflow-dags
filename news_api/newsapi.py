@@ -1,189 +1,196 @@
-#%% 
-
-# ==============================
+# =========================================================
 # IMPORT REQUIRED LIBRARIES
-# ==============================
+# =========================================================
+
+from airflow import DAG
+from airflow.decorators import task
+from datetime import datetime
 import requests
 import pandas as pd
 import psycopg2
 
 
-# ==============================
-# API CONFIGURATION
-# ==============================
+# =========================================================
+# CONFIGURATION VARIABLES
+# =========================================================
 
-# Store API key in a variable (avoid hardcoding it multiple times)
-API_KEY = ""
+# News API configuration
+#API_KEY = "9d64ba92867247f2a6c57a04a7eebc78"
+#BASE_URL = "https://newsapi.org/v2/top-headlines"
 
-# NewsAPI endpoint
-BASE_URL = "https://newsapi.org/v2/top-headlines"
-
-
-# ==============================
-# EXTRACT FUNCTION
-# Fetch data from the API
-# ==============================
-
-def fetch_news(api_key):
-    """
-    Fetch technology news articles from NewsAPI.
-    Returns a list of article JSON objects.
-    """
-
-    # Query parameters sent to the API
-    params = {
-        "country": "us",           # get US news
-        "category": "technology",  # filter for technology news
-        "apiKey": api_key          # authentication key
-    }
-
-    try:
-        # Send GET request to API
-        response = requests.get(BASE_URL, params=params)
-
-        # Raise error if request fails (status codes like 404, 401, etc.)
-        response.raise_for_status()
-
-        # Convert response into JSON
-        data = response.json()
-
-        # Extract only the articles section
-        articles = data.get("articles", [])
-
-        return articles
-
-    except requests.exceptions.RequestException as e:
-        print("API request failed:", e)
-        return []
+# PostgreSQL configuration
+#DB_NAME = "YOUR_DB"
+#DB_USER = "YOUR_USER"
+#DB_PASSWORD = "YOUR_PASSWORD"
+#DB_HOST = "localhost"
+#DB_PORT = "5432"
 
 
-# ==============================
-# TRANSFORM FUNCTION
-# Convert JSON → Clean DataFrame
-# ==============================
+# =========================================================
+# DEFINE AIRFLOW DAG
+# =========================================================
 
-def transform_to_dataframe(articles):
-    """
-    Convert raw article JSON data into a clean Pandas DataFrame.
-    """
-
-    # If API returned no data, return empty dataframe
-    if not articles:
-        return pd.DataFrame(columns=["title", "source", "url"])
-
-    # Convert JSON list into DataFrame
-    df = pd.DataFrame(articles)
-
-    # Keep only required columns
-    df = df[["title", "source", "url"]].copy()
-
-    # Extract source name from nested JSON structure
-    # Example: {"id": None, "name": "TechCrunch"} → "TechCrunch"
-    df["source"] = df["source"].apply(
-        lambda x: x.get("name") if isinstance(x, dict) else None
-    )
-
-    # Remove rows where important fields are missing
-    df.dropna(subset=["title", "source", "url"], inplace=True)
-
-    # Remove duplicate news articles using the URL
-    df.drop_duplicates(subset=["url"], inplace=True)
-
-    return df
+with DAG(
+    dag_id="news_etl_pipeline",
+    start_date=datetime(2026, 1, 1),
+    schedule_interval="@daily",   # run once per day
+    catchup=False,
+    tags=["ETL", "NewsAPI"]
+) as dag:
 
 
-# ==============================
-# MAIN PIPELINE
-# ==============================
+    # =====================================================
+    # EXTRACT TASK
+    # Fetch data from NewsAPI
+    # =====================================================
 
-# Step 1: Extract data from API
-articles = fetch_news(API_KEY)
+    @task
+    def extract_news():
+        """
+        Calls the NewsAPI and retrieves technology news articles.
+        Returns a list of JSON articles which will be pushed to XCom.
+        """
 
-print("Total Articles Retrieved:", len(articles))
+        params = {
+            "country": "us",
+            "category": "technology",
+            "apiKey": API_KEY
+        }
 
-# Step 2: Transform JSON → DataFrame
-news_df = transform_to_dataframe(articles)
+        try:
+            response = requests.get(BASE_URL, params=params)
 
-# Step 3: Preview cleaned dataset
-print("\nCleaned News Data:")
-print(news_df.head())
+            # Raise error if API call fails
+            response.raise_for_status()
 
-print("\nTotal Clean Records:", len(news_df))
+            data = response.json()
 
-# ==============================
-# DATABASE CONFIGURATION
-# ==============================
+            # Extract articles list
+            articles = data.get("articles", [])
 
-DB_NAME = ""
-DB_USER = ""
-DB_PASSWORD = ""
-DB_HOST = ""
-DB_PORT = "5432"
+            print(f"Extracted {len(articles)} articles")
+
+            return articles   # returned value automatically stored in XCom
+
+        except requests.exceptions.RequestException as e:
+            print("API request failed:", e)
+            return []
 
 
-# ==============================
-# LOAD FUNCTION
-# Insert DataFrame into Postgres
-# ==============================
+    # =====================================================
+    # TRANSFORM TASK
+    # Convert JSON → Clean DataFrame
+    # =====================================================
 
-def load_to_postgres(df):
-    """
-    Load cleaned news DataFrame into PostgreSQL table.
-    """
+    @task
+    def transform_news(articles):
+        """
+        Cleans and converts JSON articles into a structured format.
+        Returns cleaned records for loading into the database.
+        """
 
-    # If dataframe is empty, skip loading
-    if df.empty:
-        print("No data to load.")
-        return
+        if not articles:
+            return []
 
-    try:
-        # Create connection to PostgreSQL
-        conn = psycopg2.connect(
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            host=DB_HOST,
-            port=DB_PORT
+        # Convert JSON to DataFrame
+        df = pd.DataFrame(articles)
+
+        # Keep required columns
+        df = df[["title", "source", "url"]].copy()
+
+        # Extract source name from nested JSON
+        df["source"] = df["source"].apply(
+            lambda x: x.get("name") if isinstance(x, dict) else None
         )
 
-        cursor = conn.cursor()
+        # Remove rows with missing values
+        df.dropna(subset=["title", "source", "url"], inplace=True)
 
-        print("Connected to PostgreSQL")
+        # Remove duplicate articles
+        df.drop_duplicates(subset=["url"], inplace=True)
 
-        # Create table if it does not exist
-        cursor.execute("""
-        CREATE TABLE IF NOT EXISTS tech_news (
-            id SERIAL PRIMARY KEY,
-            title TEXT NOT NULL,
-            source TEXT NOT NULL,
-            url TEXT UNIQUE NOT NULL
-        );
-        """)
+        print(f"Clean records: {len(df)}")
 
-        conn.commit()
+        # Convert DataFrame → dictionary list (required for XCom)
+        return df.to_dict("records")
 
-        print("Table ready")
 
-        # Insert records from DataFrame
-        for _, row in df.iterrows():
+    # =====================================================
+    # LOAD TASK
+    # Insert data into PostgreSQL
+    # =====================================================
 
+    @task
+    def load_to_postgres(records):
+        """
+        Loads cleaned news records into PostgreSQL database.
+        """
+
+        if not records:
+            print("No data to load.")
+            return
+
+        try:
+            # Connect to PostgreSQL
+            conn = psycopg2.connect(
+                dbname=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                host=DB_HOST,
+                port=DB_PORT
+            )
+
+            cursor = conn.cursor()
+
+            print("Connected to PostgreSQL")
+
+            # Create table if it does not exist
             cursor.execute("""
-            INSERT INTO tech_news (title, source, url)
-            VALUES (%s, %s, %s)
-            ON CONFLICT (url) DO NOTHING;
-            """, (row["title"], row["source"], row["url"]))
+            CREATE TABLE IF NOT EXISTS tech_news (
+                id SERIAL PRIMARY KEY,
+                title TEXT NOT NULL,
+                source TEXT NOT NULL,
+                url TEXT UNIQUE NOT NULL
+            );
+            """)
 
-        conn.commit()
+            conn.commit()
 
-        print(f"{len(df)} rows loaded successfully")
+            # Insert records
+            for record in records:
 
-    except Exception as e:
-        print("Database error:", e)
+                cursor.execute("""
+                INSERT INTO tech_news (title, source, url)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (url) DO NOTHING;
+                """, (
+                    record["title"],
+                    record["source"],
+                    record["url"]
+                ))
 
-    finally:
-        # Close database connection
-        cursor.close()
-        conn.close()
+            conn.commit()
 
-        print("PostgreSQL connection closed")
-# %%
+            print(f"{len(records)} records inserted")
+
+        except Exception as e:
+            print("Database error:", e)
+
+        finally:
+            cursor.close()
+            conn.close()
+
+            print("PostgreSQL connection closed")
+
+
+    # =====================================================
+    # DAG PIPELINE (TASK DEPENDENCIES)
+    # =====================================================
+
+    # Extract → Transform → Load
+
+    extracted_articles = extract_news()
+
+    cleaned_articles = transform_news(extracted_articles)
+
+    load_to_postgres(cleaned_articles)
