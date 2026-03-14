@@ -19,11 +19,11 @@ API_KEY = "9d64ba92867247f2a6c57a04a7eebc78"
 BASE_URL = "https://newsapi.org/v2/top-headlines"
 
 # PostgreSQL configuration
-#DB_NAME = "YOUR_DB"
-#DB_USER = "YOUR_USER"
-#DB_PASSWORD = "YOUR_PASSWORD"
-#DB_HOST = "localhost"
-#DB_PORT = "5432"
+DB_NAME = "dwh"
+DB_USER = "postgres"
+DB_PASSWORD = "DataEngineer001"
+DB_HOST = "127.0.0.1"
+DB_PORT = "5432"
 
 
 # =========================================================
