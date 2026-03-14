@@ -13,7 +13,7 @@ import psycopg2
 # ==============================
 
 # Store API key in a variable (avoid hardcoding it multiple times)
-API_KEY = "9d64ba92867247f2a6c57a04a7eebc78"
+API_KEY = ""
 
 # NewsAPI endpoint
 BASE_URL = "https://newsapi.org/v2/top-headlines"
@@ -114,10 +114,10 @@ print("\nTotal Clean Records:", len(news_df))
 # DATABASE CONFIGURATION
 # ==============================
 
-DB_NAME = "dwh"
-DB_USER = "postgres"
-DB_PASSWORD = "DataEngineer001"
-DB_HOST = "127.0.0.1"
+DB_NAME = ""
+DB_USER = ""
+DB_PASSWORD = ""
+DB_HOST = ""
 DB_PORT = "5432"
 
 
