@@ -15,8 +15,8 @@ import psycopg2
 # =========================================================
 
 # News API configuration
-#API_KEY = "9d64ba92867247f2a6c57a04a7eebc78"
-#BASE_URL = "https://newsapi.org/v2/top-headlines"
+API_KEY = "9d64ba92867247f2a6c57a04a7eebc78"
+BASE_URL = "https://newsapi.org/v2/top-headlines"
 
 # PostgreSQL configuration
 #DB_NAME = "YOUR_DB"
