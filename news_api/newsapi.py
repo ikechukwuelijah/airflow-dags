@@ -133,11 +133,11 @@ with DAG(
         try:
             # Connect to PostgreSQL
             conn = psycopg2.connect(
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                host=DB_HOST,
-                port=DB_PORT
+                dbname="dwh",
+                user="postgres",
+                password="DataEngineer001",
+                host="host.docker.internal",
+                port="5432"
             )
 
             cursor = conn.cursor()
