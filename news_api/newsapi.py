@@ -1,210 +1,221 @@
-# =========================================================
-# IMPORT REQUIRED LIBRARIES
-# =========================================================
-
-from airflow import DAG
-from airflow.decorators import task
-from airflow.models import Variable
-from airflow.providers.postgres.hooks.postgres import PostgresHook
 from datetime import datetime
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.providers.postgres.hooks.postgres import PostgresHook
+from airflow.models import Variable
 
 import requests
 import pandas as pd
+import smtplib
+
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
 
 
 # =========================================================
-# CONFIGURATION VARIABLES
+# DEFAULT DAG SETTINGS
 # =========================================================
 
-# Retrieve API key securely from Airflow Variables
-API_KEY = Variable.get("NEWS_API_KEY")
-
-# NewsAPI endpoint
-BASE_URL = "https://newsapi.org/v2/top-headlines"
+default_args = {
+    'owner': 'Ike',
+    'start_date': datetime(2025, 6, 18),
+    'retries': 1,
+    'depends_on_past': False,
+    'email_on_failure': False,
+    'email_on_retry': False,
+}
 
 
 # =========================================================
-# DEFINE AIRFLOW DAG
+# DEFINE DAG
 # =========================================================
 
-with DAG(
-    dag_id="news_etl_pipeline",
-    start_date=datetime(2026, 1, 1),
-    schedule_interval="@daily",      # DAG runs once per day
-    catchup=False,                   # do not backfill previous runs
-    tags=["ETL", "NewsAPI"]
-) as dag:
+dag = DAG(
+    dag_id='tech_news_email_pipeline',
+    default_args=default_args,
+    description='Daily ETL: fetch tech news, send email, and load to Postgres',
+    schedule_interval='@daily',
+    catchup=False,
+    tags=['etl', 'news', 'email']
+)
 
 
-    # =====================================================
-    # EXTRACT TASK
-    # Fetch technology news from NewsAPI
-    # =====================================================
+# =========================================================
+# TASK 1: FETCH NEWS FROM API
+# =========================================================
 
-    @task
-    def extract_news():
-        """
-        Calls NewsAPI and retrieves technology news articles.
+def fetch_news(**kwargs):
 
-        Returns:
-            list: List of JSON article objects.
-        """
+    api_key = Variable.get("NEWS_API_KEY")
 
-        # API query parameters
-        params = {
-            "country": "us",
-            "category": "technology",
-            "apiKey": API_KEY
-        }
+    url = "https://newsapi.org/v2/top-headlines"
 
-        try:
-            # Send GET request to API
-            response = requests.get(BASE_URL, params=params)
+    params = {
+        "country": "us",
+        "category": "technology",
+        "apiKey": api_key
+    }
 
-            # Raise error if API request fails
-            response.raise_for_status()
+    response = requests.get(url, params=params)
+    response.raise_for_status()
 
-            # Convert response to JSON
-            data = response.json()
+    data = response.json()
 
-            # Extract articles list
-            articles = data.get("articles", [])
+    articles = data.get("articles", [])
 
-            print(f"Extracted {len(articles)} articles")
+    print(f"Fetched {len(articles)} articles")
 
-            # Returned data is automatically stored in XCom
-            return articles
-
-        except requests.exceptions.RequestException as e:
-            print("API request failed:", e)
-            return []
+    ti = kwargs['ti']
+    ti.xcom_push(key="news_data", value=articles)
 
 
-    # =====================================================
-    # TRANSFORM TASK
-    # Clean and structure the extracted JSON data
-    # =====================================================
+# =========================================================
+# TASK 2: SEND NEWS EMAIL
+# =========================================================
 
-    @task
-    def transform_news(articles):
-        """
-        Converts raw JSON articles into cleaned structured records.
+def send_news_email(**kwargs):
 
-        Steps:
-        - Convert JSON to Pandas DataFrame
-        - Select relevant columns
-        - Extract source name from nested JSON
-        - Remove null values
-        - Remove duplicates
+    ti = kwargs['ti']
+    articles = ti.xcom_pull(task_ids="fetch_news", key="news_data")
 
-        Returns:
-            list: Cleaned records as dictionaries
-        """
+    if not articles:
+        print("No news available to email")
+        return
 
-        if not articles:
-            print("No articles received from extract step")
-            return []
+    # get email configuration from Airflow Variables
+    email_config = Variable.get(
+        "email_config",
+        default_var={},
+        deserialize_json=True
+    )
 
-        # Convert JSON list to DataFrame
-        df = pd.DataFrame(articles)
+    smtp_host = email_config.get("smtp_host")
+    smtp_port = int(email_config.get("smtp_port", 587))
+    smtp_user = email_config.get("smtp_user")
+    smtp_password = email_config.get("smtp_password")
 
-        # Select required columns
-        df = df[["title", "source", "url"]].copy()
+    sender_email = email_config.get("sender_email")
+    receiver_emails = email_config.get("receiver_email", [])
 
-        # Extract source name from nested dictionary
-        df["source"] = df["source"].apply(
-            lambda x: x.get("name") if isinstance(x, dict) else None
+    # build email content
+    body = "Today's Top Technology News\n\n"
+
+    for article in articles[:10]:
+
+        title = article.get("title")
+        source = article.get("source", {}).get("name")
+        url = article.get("url")
+
+        body += f"{title}\nSource: {source}\n{url}\n\n"
+
+    msg = MIMEMultipart()
+
+    msg["Subject"] = "Daily Technology News"
+    msg["From"] = sender_email
+    msg["To"] = ", ".join(receiver_emails)
+
+    msg.attach(MIMEText(body, "plain"))
+
+    # send email
+    if smtp_port == 465:
+        server = smtplib.SMTP_SSL(smtp_host, smtp_port)
+    else:
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+
+    server.login(smtp_user, smtp_password)
+
+    server.sendmail(sender_email, receiver_emails, msg.as_string())
+
+    server.quit()
+
+    print("Tech news email sent successfully")
+
+
+# =========================================================
+# TASK 3: TRANSFORM + LOAD INTO POSTGRES
+# =========================================================
+
+def load_news_to_postgres(**kwargs):
+
+    ti = kwargs['ti']
+
+    articles = ti.xcom_pull(task_ids="fetch_news", key="news_data")
+
+    if not articles:
+        print("No data to load")
+        return
+
+    df = pd.DataFrame(articles)
+
+    df = df[["title", "source", "url"]].copy()
+
+    df["source"] = df["source"].apply(
+        lambda x: x.get("name") if isinstance(x, dict) else None
+    )
+
+    df.dropna(subset=["title", "source", "url"], inplace=True)
+
+    df.drop_duplicates(subset=["url"], inplace=True)
+
+    hook = PostgresHook(postgres_conn_id="postgres_news")
+
+    conn = hook.get_conn()
+    cursor = conn.cursor()
+
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS tech_news (
+            id SERIAL PRIMARY KEY,
+            title TEXT,
+            source TEXT,
+            url TEXT UNIQUE
         )
+    """)
 
-        # Remove rows with missing important fields
-        df.dropna(subset=["title", "source", "url"], inplace=True)
+    for _, row in df.iterrows():
 
-        # Remove duplicate articles based on URL
-        df.drop_duplicates(subset=["url"], inplace=True)
+        cursor.execute("""
+            INSERT INTO tech_news (title, source, url)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (url) DO NOTHING
+        """, (row["title"], row["source"], row["url"]))
 
-        print(f"Clean records: {len(df)}")
+    conn.commit()
 
-        # Convert DataFrame → list of dictionaries for XCom
-        return df.to_dict("records")
+    cursor.close()
+    conn.close()
 
-
-    # =====================================================
-    # LOAD TASK
-    # Insert cleaned data into PostgreSQL
-    # =====================================================
-
-    @task
-    def load_to_postgres(records):
-        """
-        Loads cleaned records into PostgreSQL.
-
-        Uses Airflow PostgresHook to securely retrieve
-        database credentials from Airflow Connections.
-        """
-
-        if not records:
-            print("No data to load.")
-            return
-
-        try:
-            # Create Postgres connection using Airflow Connection ID
-            hook = PostgresHook(postgres_conn_id="postgres_news")
-
-            # Get psycopg2 connection from hook
-            conn = hook.get_conn()
-            cursor = conn.cursor()
-
-            print("Connected to PostgreSQL")
-
-            # Create table if it does not exist
-            cursor.execute("""
-            CREATE TABLE IF NOT EXISTS tech_news (
-                id SERIAL PRIMARY KEY,
-                title TEXT NOT NULL,
-                source TEXT NOT NULL,
-                url TEXT UNIQUE NOT NULL
-            );
-            """)
-
-            conn.commit()
-
-            # Insert records into table
-            for record in records:
-
-                cursor.execute("""
-                INSERT INTO tech_news (title, source, url)
-                VALUES (%s, %s, %s)
-                ON CONFLICT (url) DO NOTHING;
-                """, (
-                    record["title"],
-                    record["source"],
-                    record["url"]
-                ))
-
-            conn.commit()
-
-            print(f"{len(records)} records inserted")
-
-        except Exception as e:
-            print("Database error:", e)
-
-        finally:
-
-            cursor.close()
-            conn.close()
-
-            print("PostgreSQL connection closed")
+    print(f"{len(df)} records processed")
 
 
-    # =====================================================
-    # DAG TASK DEPENDENCIES
-    # =====================================================
+# =========================================================
+# DEFINE TASKS
+# =========================================================
 
-    # Task 1: Extract news articles from API
-    extracted_articles = extract_news()
+fetch_task = PythonOperator(
+    task_id="fetch_news",
+    python_callable=fetch_news,
+    provide_context=True,
+    dag=dag
+)
 
-    # Task 2: Clean and transform extracted data
-    cleaned_articles = transform_news(extracted_articles)
+email_task = PythonOperator(
+    task_id="send_news_email",
+    python_callable=send_news_email,
+    provide_context=True,
+    dag=dag
+)
 
-    # Task 3: Load cleaned data into PostgreSQL
-    load_to_postgres(cleaned_articles)
+load_task = PythonOperator(
+    task_id="load_news",
+    python_callable=load_news_to_postgres,
+    provide_context=True,
+    dag=dag
+)
+
+
+# =========================================================
+# TASK DEPENDENCIES
+# =========================================================
+
+fetch_task >> [email_task, load_task]
