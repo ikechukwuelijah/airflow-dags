@@ -12,10 +12,11 @@ A mix of practical DAGs and experimental scrapes, including:
 | `aliexpress_trends`    | Ingests AliExpress popular listings by keyword or category       |
 | `crypto_price_tracker` | Tracks top cryptocurrencies and percent change in real-time      |
 | `us_stock_market`      | Pulls US stock data (e.g. S&P 500, NASDAQ) for dashboarding       |
-| `air_pollution_reverse`| Reconstructs UK air quality dataset from open APIs               |
+| `air_pollution_reverse` | Reconstructs UK air quality dataset from open APIs               |
 | `self_confidence_quotes`| Loads curated inspirational quotes into a DB for wellness apps  |
-|`vehicleDB_pipeline`   | Tracks latest vehicle models from API by type and model year     |
-|`top_five_foothball_league`   | Prediction for the top five football leagues in Europe     |
+| `vehicleDB_pipeline`   | Tracks latest vehicle models from API by type and model year     |
+| 'tech_news' | Pipeline loads US tech news to db daily | 
+| `top_five_foothball_league`   | Prediction for the top five football leagues in Europe     |
 
 ..and more..
 
