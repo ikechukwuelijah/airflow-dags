@@ -11,7 +11,7 @@ url = "https://real-time-amazon-data.p.rapidapi.com/search"
 querystring = {"query":"Fashion","page":"1","country":"CA","sort_by":"BEST_SELLERS","category_id":"LOWEST_PRICE","product_condition":"ALL","is_prime":"false","deals_and_discounts":"NONE"}
 
 headers = {
-    "x-rapidapi-key": "f38eae887bmsh5211e33c97c1c50p125cafjsnec52eb060a05",
+    "x-rapidapi-key": "",
     "x-rapidapi-host": "real-time-amazon-data.p.rapidapi.com",
     "Content-Type": "application/json"
 }
@@ -29,10 +29,10 @@ else:
 
 # PostgreSQL connection details
 conn = psycopg2.connect(
-    host="127.0.0.1",
-    database="dwh",
-    user="postgres",
-    password="DataEngineer001",
+    host="",
+    database="",
+    user="",
+    password="",
     port="5432"
 )
 
