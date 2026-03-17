@@ -4,10 +4,10 @@ import pandas as pd
 
 url = "https://aliexpress-business-api.p.rapidapi.com/affiliate-hot-products.php"
 
-querystring = {"keyWord":"Human Hair","currency":"USD","lang":"en","country":"NG"}
+querystring = {"keyWord":"Human Hair","currency":"USD","lang":"en","country":"CA"}
 
 headers = {
-	"x-rapidapi-key": "",
+	"x-rapidapi-key": "f38eae887bmsh5211e33c97c1c50p125cafjsnec52eb060a05",
 	"x-rapidapi-host": "aliexpress-business-api.p.rapidapi.com"
 }
 
@@ -23,5 +23,6 @@ items = data['data']['itemList']
 df = pd.DataFrame(items)
 
 print(df.head())
+
 
 # %%
